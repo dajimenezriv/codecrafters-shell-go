@@ -53,7 +53,16 @@ func main() {
 				continue
 			}
 
-			exec.Command(path, args).Run()
+			cmd := exec.Cmd{
+				Path:   path,
+				Args:   []string{path, args},
+				Stdin:  os.Stdin,
+				Stdout: os.Stdout,
+				Stderr: os.Stderr,
+			}
+			if err := cmd.Run(); err != nil {
+				fmt.Println(err)
+			}
 		}
 	}
 }
