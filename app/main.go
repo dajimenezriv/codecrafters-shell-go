@@ -15,36 +15,45 @@ func main() {
 	for {
 		fmt.Print("$ ")
 
-		command, err := r.ReadString('\n')
+		input, err := r.ReadString('\n')
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading input:", err)
 			os.Exit(1)
 		}
-		command = strings.TrimSpace(command)
+		input = strings.TrimSpace(input)
+		inputList := strings.Split(input, " ")
+
+		command := inputList[0]
+		args := strings.Join(inputList[1:], " ")
 
 		if command == "exit" {
 			break
 		}
 
-		if strings.HasPrefix(command, "echo ") {
-			fmt.Println(command[5:])
+		if command == "echo" {
+			fmt.Println(args)
 			continue
 		}
 
-		if strings.HasPrefix(command, "type ") {
-			v := command[5:]
-			if v == "exit" || v == "echo" || v == "type" {
-				fmt.Printf("%s is a shell builtin\n", v)
+		if command == "type" {
+			if args == "exit" || args == "echo" || args == "type" {
+				fmt.Printf("%s is a shell builtin\n", args)
 			} else {
-				path, ok := searchExecutableCommand(v)
+				path, ok := searchExecutableCommand(args)
 				if ok {
-					fmt.Printf("%s is %s\n", v, path)
+					fmt.Printf("%s is %s\n", args, path)
 				} else {
-					fmt.Printf("%s not found\n", v)
+					fmt.Printf("%s not found\n", args)
 				}
 			}
 		} else {
-			fmt.Printf("%s: command not found\n", command)
+			path, ok := searchExecutableCommand(command)
+			if !ok {
+				fmt.Printf("%s: command not found\n", command)
+				continue
+			}
+
+			exec.Command(path, args).Run()
 		}
 	}
 }
