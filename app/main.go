@@ -55,7 +55,7 @@ func main() {
 
 			cmd := exec.Cmd{
 				Path:   path,
-				Args:   []string{path, args},
+				Args:   inputList,
 				Stdin:  os.Stdin,
 				Stdout: os.Stdout,
 				Stderr: os.Stderr,
