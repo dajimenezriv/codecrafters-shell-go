@@ -47,48 +47,60 @@ func TestBuiltins(t *testing.T) {
 }
 
 func TestRedirectOutput(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "output")
+	const errMsg = "cd: nonexisting: No such file or directory\n"
 
-	success := func(char string) string {
-		return fmt.Sprintf("echo 'hello world' %s %s", char, path)
+	success := func(op string) func(path string) string {
+		return func(path string) string {
+			return fmt.Sprintf("echo 'hello world' %s %s", op, path)
+		}
 	}
-	invalid := func(char string) string {
-		return fmt.Sprintf("cd nonexisting %s %s", char, path)
+	invalid := func(op string) func(path string) string {
+		return func(path string) string {
+			return fmt.Sprintf("cd nonexisting %s %s", op, path)
+		}
 	}
-	append := func(char string) string {
-		return fmt.Sprintf("echo 'hello world' %s %s\necho 'hello world' %s %s\n", char, path, char, path)
+	twice := func(op string) func(path string) string {
+		return func(path string) string {
+			line := fmt.Sprintf("echo 'hello world' %s %s\n", op, path)
+			return line + line
+		}
 	}
 
 	tests := []struct {
-		name, input, wantOutput, wantStdout, wantStderr string
+		name       string
+		input      func(path string) string
+		wantFile   string
+		wantStdout string
+		wantStderr string
 	}{
 		{"success stdout >", success(">"), "hello world\n", "$ $ ", ""},
 		{"success stdout 1>", success("1>"), "hello world\n", "$ $ ", ""},
 		{"success stderr 2>", success("2>"), "", "$ hello world\n$ ", ""},
-		{"error stdout >", invalid(">"), "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
-		{"error stdout 1>", invalid("1>"), "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
-		{"error stderr 2>", invalid("2>"), "cd: nonexisting: No such file or directory\n", "$ $ ", ""},
-		{"append stdout >>", append(">>"), "hello world\nhello world\n", "$ $ $ ", ""},
-		{"append stdout 1>>", append("1>>"), "hello world\nhello world\n", "$ $ $ ", ""},
+		{"error stdout >", invalid(">"), "", "$ $ ", errMsg},
+		{"error stdout 1>", invalid("1>"), "", "$ $ ", errMsg},
+		{"error stderr 2>", invalid("2>"), errMsg, "$ $ ", ""},
+		{"append stdout >>", twice(">>"), "hello world\nhello world\n", "$ $ $ ", ""},
+		{"append stdout 1>>", twice("1>>"), "hello world\nhello world\n", "$ $ $ ", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "output")
 
-			stdout, stderr := runShell(t, tt.input)
+			stdout, stderr := runShell(t, tt.input(path))
 
 			b, err := os.ReadFile(path)
 			if err != nil {
-				t.Fatalf("read file = %v", err)
+				t.Fatalf("read file: %v", err)
 			}
-			if got := string(b); got != tt.wantOutput {
-				t.Fatalf("cmd stdout = %q, want %q", got, tt.wantOutput)
+			if got := string(b); got != tt.wantFile {
+				t.Errorf("file contents = %q, want %q", got, tt.wantFile)
 			}
 			if got := stdout.String(); got != tt.wantStdout {
-				t.Errorf("Run().stdout = %q, want %q", got, tt.wantStdout)
+				t.Errorf("stdout = %q, want %q", got, tt.wantStdout)
 			}
 			if got := stderr.String(); got != tt.wantStderr {
-				t.Errorf("Run().stderr = %q, want %q", got, tt.wantStderr)
+				t.Errorf("stderr = %q, want %q", got, tt.wantStderr)
 			}
 		})
 	}
