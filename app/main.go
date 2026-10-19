@@ -9,11 +9,17 @@ import (
 	"strings"
 )
 
-var commands = map[string]func(args string){
-	"cd":   cd,
-	"echo": echo,
-	"pwd":  pwd,
-	"type": typeCMD,
+type builtin func(args string)
+
+var commands map[string]builtin
+
+func init() {
+	commands = map[string]builtin{
+		"cd":   cd,
+		"echo": echo,
+		"pwd":  pwd,
+		"type": typeCMD,
+	}
 }
 
 func main() {
