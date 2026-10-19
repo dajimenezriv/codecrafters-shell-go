@@ -11,7 +11,9 @@ linters:
   settings:
     errcheck:
       exclude-functions:
-        - fmt.Fprintf # writes to stdout/test buffers; error is never actionable
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
     nolintlint:
       require-explanation: true
       require-specific: true

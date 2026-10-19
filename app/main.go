@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,53 +17,80 @@ func main() {
 	os.Exit(NewShell(os.Stdin, os.Stdout, os.Stderr).Run())
 }
 
-type builtin func(args string)
+type builtinFunc func(args []string)
 
 type Shell struct {
-	Builtins       map[string]builtin
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 	Exited         bool
-
-	cmdStdout, cmdStderr io.Writer
 }
 
 func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
-	s := &Shell{Stdin: stdin, Stdout: stdout, Stderr: stderr}
-	s.Builtins = map[string]builtin{
-		"cd":   s.cd,
-		"echo": s.echo,
-		"exit": s.exit,
-		"pwd":  s.pwd,
-		"type": s.typeBuiltin,
+	return &Shell{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
 	}
-	return s
 }
 
 func (s *Shell) Run() int {
 	sc := bufio.NewScanner(s.Stdin)
 
 	for !s.Exited {
-		s.prompt(sc)
+		fmt.Fprint(s.Stdout, "$ ")
+		if !sc.Scan() {
+			break
+		}
+		s.prompt(sc.Text())
 	}
 
 	if err := sc.Err(); err != nil {
 		fmt.Fprintf(s.Stderr, "error reading input: %v\n", err)
+		return 1
 	}
-
 	return 0
 }
 
-func (s *Shell) prompt(sc *bufio.Scanner) {
-	fmt.Fprint(s.Stdout, "$ ")
-	if !sc.Scan() {
-		s.Exited = true
-		return
-	}
+type command struct {
+	s              *Shell
+	builtins       map[string]builtinFunc
+	stdout, stderr io.Writer
+}
 
-	fields, err := shlex.Split(sc.Text())
+func newCommand(s *Shell, stdout, stderr io.Writer) *command {
+	c := &command{
+		s:      s,
+		stdout: stdout,
+		stderr: stderr,
+	}
+	c.builtins = map[string]builtinFunc{
+		"cd":   c.cd,
+		"echo": c.echo,
+		"exit": c.exit,
+		"pwd":  c.pwd,
+		"type": c.typeCmd,
+	}
+	return c
+}
+
+type redirect struct {
+	fd    int // 1 for stdout, 2 for stderr
+	flags int
+}
+
+var redirects = map[string]redirect{
+	">":   {1, os.O_WRONLY | os.O_CREATE | os.O_TRUNC},
+	"1>":  {1, os.O_WRONLY | os.O_CREATE | os.O_TRUNC},
+	"2>":  {2, os.O_WRONLY | os.O_CREATE | os.O_TRUNC},
+	">>":  {1, os.O_APPEND | os.O_CREATE | os.O_WRONLY},
+	"1>>": {1, os.O_APPEND | os.O_CREATE | os.O_WRONLY},
+	"2>>": {2, os.O_APPEND | os.O_CREATE | os.O_WRONLY},
+}
+
+func (s *Shell) prompt(line string) {
+	fields, err := shlex.Split(line)
 	if err != nil {
-		fmt.Fprintf(s.Stderr, "error parsing args: %v\n", err)
+		fmt.Fprintf(s.Stderr, "parse error: %v", err)
 		return
 	}
 	if len(fields) == 0 {
@@ -70,86 +98,86 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 	}
 	name, args := fields[0], fields[1:]
 
-	s.cmdStdout, s.cmdStderr = s.Stdout, s.Stderr
+	stdout, stderr := s.Stdout, s.Stderr
 
 	if len(args) >= 2 {
 		char := args[len(args)-2]
-		var f *os.File
-		switch char {
-		case ">", "1>":
-			f = s.getOutputFile(args[len(args)-1], os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
-			s.cmdStdout = f
-		case "2>":
-			f = s.getOutputFile(args[len(args)-1], os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
-			s.cmdStderr = f
-		case ">>", "1>>":
-			f = s.getOutputFile(args[len(args)-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-			s.cmdStdout = f
-		case "2>>":
-			f = s.getOutputFile(args[len(args)-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY)
-			s.cmdStderr = f
-		}
-
-		if f != nil {
+		if r, ok := redirects[char]; ok {
+			f, err := os.OpenFile(args[len(args)-1], r.flags, 0o644)
+			if err != nil {
+				fmt.Fprintf(s.Stderr, "cannot open output file: %v", err)
+				return
+			}
 			defer f.Close()
+			switch r.fd {
+			case 1:
+				stdout = f
+			case 2:
+				stderr = f
+			}
 			args = args[:len(args)-2]
 		}
 	}
 
-	if fn, ok := s.Builtins[name]; ok {
-		fn(strings.Join(args, " "))
+	c := newCommand(s, stdout, stderr)
+	if fn, ok := c.builtins[name]; ok {
+		fn(args)
 		return
 	}
 
 	cmd := exec.Command(name, args...)
-	cmd.Stdout, cmd.Stderr = s.cmdStdout, s.cmdStderr
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Run(); err != nil {
-		if _, ok := errors.AsType[*exec.ExitError](err); ok {
-		} else if errors.Is(err, exec.ErrNotFound) {
-			fmt.Fprintf(s.cmdStderr, "%s: command not found\n", name)
-		} else {
-			fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
+		if errors.Is(err, exec.ErrNotFound) {
+			fmt.Fprintf(stderr, "%s: command not found\n", name)
+		} else if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+			fmt.Fprintf(stderr, "%s: %v\n", name, err)
 		}
 	}
 }
 
-func (s *Shell) getOutputFile(path string, flags int) *os.File {
-	f, err := os.OpenFile(path, flags, 0644)
-	if err != nil {
-		fmt.Fprintf(s.Stderr, "cannot get output file: %v\n", err)
-		return nil
+func (c *command) cd(args []string) {
+	dir := "~"
+	if len(args) > 0 {
+		dir = args[0]
 	}
-	return f
+	if dir == "~" {
+		dir, _ = os.UserHomeDir()
+	}
+	if err := os.Chdir(dir); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			fmt.Fprintf(c.stderr, "cd: %s: No such file or directory\n", dir)
+		} else {
+			fmt.Fprintf(c.stderr, "cd: %v", err)
+		}
+	}
 }
 
-func (s *Shell) cd(args string) {
-	if args == "~" {
-		args, _ = os.UserHomeDir()
-	}
-	if err := os.Chdir(args); err != nil {
-		fmt.Fprintf(s.cmdStderr, "cd: %s: No such file or directory\n", args)
-	}
+func (c *command) echo(args []string) {
+	fmt.Fprintln(c.stdout, strings.Join(args, " "))
 }
 
-func (s *Shell) echo(args string) { fmt.Fprintln(s.cmdStdout, args) }
+func (c *command) exit(_ []string) {
+	c.s.Exited = true
+}
 
-func (s *Shell) exit(_ string) { s.Exited = true }
-
-func (s *Shell) pwd(_ string) {
+func (c *command) pwd(_ []string) {
 	path, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(s.cmdStderr, "pwd: %v\n", err)
+		fmt.Fprintf(c.stderr, "pwd: %v\n", err)
 	} else {
-		fmt.Fprintln(s.cmdStdout, path)
+		fmt.Fprintf(c.stdout, "%s\n", path)
 	}
 }
 
-func (s *Shell) typeBuiltin(args string) {
-	if _, ok := s.Builtins[args]; ok {
-		fmt.Fprintf(s.cmdStdout, "%s is a shell builtin\n", args)
-	} else if path, err := exec.LookPath(args); err != nil {
-		fmt.Fprintf(s.cmdStdout, "%s: not found\n", args)
-	} else {
-		fmt.Fprintf(s.cmdStdout, "%s is %s\n", args, path)
+func (c *command) typeCmd(args []string) {
+	for _, name := range args {
+		if _, ok := c.builtins[name]; ok {
+			fmt.Fprintf(c.stdout, "%s is a shell builtin\n", name)
+		} else if path, err := exec.LookPath(name); err != nil {
+			fmt.Fprintf(c.stdout, "%s: not found\n", name)
+		} else {
+			fmt.Fprintf(c.stdout, "%s is %s\n", name, path)
+		}
 	}
 }
