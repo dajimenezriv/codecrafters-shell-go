@@ -43,49 +43,7 @@ func (s *Shell) Run() int {
 	sc := bufio.NewScanner(s.Stdin)
 
 	for !s.Exited {
-		fmt.Fprint(s.Stdout, "$ ")
-		if !sc.Scan() {
-			break
-		}
-
-		fields, err := shlex.Split(sc.Text())
-		if err != nil {
-			fmt.Fprintf(s.Stderr, "error parsing args: %v\n", err)
-			continue
-		}
-		if len(fields) == 0 {
-			continue
-		}
-		name, args := fields[0], fields[1:]
-
-		s.cmdStdout = s.Stdout
-
-		l := len(args)
-		if l > 2 && (args[l-2] == ">" || args[l-2] == "1>") {
-			f, err := os.Create(args[l-1])
-			if err != nil {
-				fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
-				continue
-			}
-			defer f.Close()
-			s.cmdStdout = f
-			args = args[:l-2]
-		}
-
-		if fn, ok := s.Builtins[name]; ok {
-			fn(strings.Join(args, " "))
-			continue
-		}
-
-		cmd := exec.Command(name, args...)
-		cmd.Stdout, cmd.Stderr = s.cmdStdout, s.cmdStderr
-		if err := cmd.Run(); err != nil {
-			if errors.Is(err, exec.ErrNotFound) {
-				fmt.Fprintf(s.cmdStderr, "%s: command not found\n", name)
-			} else {
-				fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
-			}
-		}
+		s.prompt(sc)
 	}
 
 	if err := sc.Err(); err != nil {
@@ -93,6 +51,53 @@ func (s *Shell) Run() int {
 	}
 
 	return 0
+}
+
+func (s *Shell) prompt(sc *bufio.Scanner) {
+	fmt.Fprint(s.Stdout, "$ ")
+	if !sc.Scan() {
+		s.Exited = true
+		return
+	}
+
+	fields, err := shlex.Split(sc.Text())
+	if err != nil {
+		fmt.Fprintf(s.Stderr, "error parsing args: %v\n", err)
+		return
+	}
+	if len(fields) == 0 {
+		return
+	}
+	name, args := fields[0], fields[1:]
+
+	s.cmdStdout = s.Stdout
+
+	l := len(args)
+	if l >= 2 && (args[l-2] == ">" || args[l-2] == "1>") {
+		f, err := os.Create(args[l-1])
+		if err != nil {
+			fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
+			return
+		}
+		defer f.Close()
+		s.cmdStdout = f
+		args = args[:l-2]
+	}
+
+	if fn, ok := s.Builtins[name]; ok {
+		fn(strings.Join(args, " "))
+		return
+	}
+
+	cmd := exec.Command(name, args...)
+	cmd.Stdout, cmd.Stderr = s.cmdStdout, s.cmdStderr
+	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			fmt.Fprintf(s.cmdStderr, "%s: command not found\n", name)
+		} else {
+			fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
+		}
+	}
 }
 
 func (s *Shell) cd(args string) {
