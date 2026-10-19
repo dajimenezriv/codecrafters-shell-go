@@ -61,18 +61,15 @@ func (s *Shell) Run() int {
 		s.cmdStdout = s.Stdout
 
 		l := len(args)
-		if l > 2 {
-			if args[l-2] == ">" {
-				path := args[l-1]
-				f, err := os.Create(path)
-				if err != nil {
-					fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
-					continue
-				}
-				defer f.Close()
-				s.cmdStdout = f
-				args = args[:l-2]
+		if l > 2 && (args[l-2] == ">" || args[l-2] == "1>") {
+			f, err := os.Create(args[l-1])
+			if err != nil {
+				fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
+				continue
 			}
+			defer f.Close()
+			s.cmdStdout = f
+			args = args[:l-2]
 		}
 
 		if fn, ok := s.Builtins[name]; ok {
