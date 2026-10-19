@@ -2,123 +2,103 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
-type builtin func(args string)
-
-var commands map[string]builtin
-
-func init() {
-	commands = map[string]builtin{
-		"cd":   cd,
-		"echo": echo,
-		"pwd":  pwd,
-		"type": typeCMD,
-	}
+func main() {
+	NewShell(os.Stdin, os.Stdout, os.Stderr).Run()
 }
 
-func main() {
-	r := bufio.NewReader(os.Stdin)
+type builtin func(args string)
+
+type Shell struct {
+	builtins map[string]builtin
+	stdin    io.Reader
+	stdout   io.Writer
+	stderr   io.Writer
+}
+
+func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
+	s := &Shell{stdin: stdin, stdout: stdout, stderr: stderr}
+	s.builtins = map[string]builtin{
+		"cd":   s.cd,
+		"echo": s.echo,
+		"exit": s.exit,
+		"pwd":  s.pwd,
+		"type": s.typeBuiltin,
+	}
+	return s
+}
+
+func (s *Shell) Run() {
+	sc := bufio.NewScanner(s.stdin)
 
 	for {
 		fmt.Print("$ ")
 
-		input, err := r.ReadString('\n')
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error reading input:", err)
-			os.Exit(1)
-		}
-		input = strings.TrimSpace(input)
-		inputList := strings.Split(input, " ")
-
-		command := inputList[0]
-		args := strings.Join(inputList[1:], " ")
-
-		if command == "exit" {
+		if !sc.Scan() {
 			break
 		}
 
-		if fn, ok := commands[command]; ok {
+		fields := strings.Fields(sc.Text())
+		if len(fields) == 0 {
+			continue
+		}
+		name, argsList := fields[0], fields[1:]
+		args := strings.Join(argsList, " ")
+
+		if fn, ok := s.builtins[name]; ok {
 			fn(args)
 			continue
 		}
 
-		path, ok := searchExecutableCommand(command)
-		if !ok {
-			fmt.Printf("%s: command not found\n", command)
-			continue
-		}
-
-		cmd := exec.Cmd{
-			Path:   path,
-			Args:   inputList,
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-		}
+		cmd := exec.Command(name, argsList...)
+		cmd.Stdout, cmd.Stderr = s.stdout, s.stderr
 		if err := cmd.Run(); err != nil {
-			fmt.Println(err)
-		}
-	}
-}
-
-func cd(args string) {
-	if args == "~" {
-		args, _ = os.UserHomeDir()
-	}
-	err := os.Chdir(args)
-	if err != nil {
-		fmt.Printf("cd: %s: No such file or directory\n", args)
-	}
-}
-
-func echo(args string) {
-	fmt.Println(args)
-}
-
-func pwd(_ string) {
-	path, _ := os.Getwd()
-	fmt.Println(path)
-}
-
-func typeCMD(args string) {
-	_, ok := commands[args]
-	if args == "exit" || ok {
-		fmt.Printf("%s is a shell builtin\n", args)
-		return
-	}
-
-	path, ok := searchExecutableCommand(args)
-	if ok {
-		fmt.Printf("%s is %s\n", args, path)
-	} else {
-		fmt.Printf("%s not found\n", args)
-	}
-}
-
-func searchExecutableCommand(c string) (string, bool) {
-	dirs := filepath.SplitList(os.Getenv("PATH"))
-
-	for _, dir := range dirs {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-
-		for _, entry := range entries {
-			if !entry.IsDir() && entry.Name() == c {
-				path := dir + "/" + entry.Name()
-				if _, err := exec.LookPath(path); err == nil {
-					return path, true
-				}
+			if errors.Is(err, exec.ErrNotFound) {
+				fmt.Fprintf(s.stderr, "%s: command not found\n", name)
 			}
 		}
 	}
 
-	return "", false
+	if err := sc.Err(); err != nil {
+		fmt.Fprintf(s.stderr, "error reading input: %v\n", err)
+	}
+}
+
+func (s *Shell) cd(args string) {
+	if args == "~" {
+		args, _ = os.UserHomeDir()
+	}
+	if err := os.Chdir(args); err != nil {
+		fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", args)
+	}
+}
+
+func (s *Shell) echo(args string) {
+	fmt.Println(args)
+}
+
+func (s *Shell) exit(_ string) {
+	os.Exit(0)
+}
+
+func (s *Shell) pwd(_ string) {
+	path, _ := os.Getwd()
+	fmt.Println(path)
+}
+
+func (s *Shell) typeBuiltin(args string) {
+	if _, ok := s.builtins[args]; ok {
+		fmt.Printf("%s is a shell builtin\n", args)
+	} else if path, err := exec.LookPath(args); err != nil {
+		fmt.Printf("%s is %s\n", args, path)
+	} else {
+		fmt.Printf("%s not found\n", args)
+	}
 }
