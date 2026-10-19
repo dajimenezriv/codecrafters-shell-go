@@ -70,7 +70,7 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 	}
 	name, args := fields[0], fields[1:]
 
-	s.cmdStdout = s.Stdout
+	s.cmdStdout, s.cmdStderr = s.Stdout, s.Stderr
 
 	l := len(args)
 	if l >= 2 && (args[l-2] == ">" || args[l-2] == "1>") {
