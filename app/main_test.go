@@ -51,9 +51,12 @@ func TestRedirectOutput(t *testing.T) {
 	tests := []struct {
 		name, input, wantOutput, wantStdout, wantStderr string
 	}{
-		{"stdout >", "echo 'hello world' > " + path, "hello world\n", "$ $ ", ""},
-		{"stdout 1>", "echo 'hello world' 1> " + path, "hello world\n", "$ $ ", ""},
-		{"stderr 2>", "echo 'hello world' 2> " + path, "", "$ hello world\n$ ", ""},
+		{"success stdout >", "echo 'hello world' > " + path, "hello world\n", "$ $ ", ""},
+		{"success stdout 1>", "echo 'hello world' 1> " + path, "hello world\n", "$ $ ", ""},
+		{"success stderr 2>", "echo 'hello world' 2> " + path, "", "$ hello world\n$ ", ""},
+		{"error stdout >", "cd nonexisting > " + path, "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
+		{"error stdout 1>", "cd nonexisting > " + path, "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
+		{"error stderr 2>", "cd nonexisting 2> " + path, "cd: nonexisting: No such file or directory\n", "$ $ ", ""},
 	}
 
 	for _, tt := range tests {
@@ -72,7 +75,7 @@ func TestRedirectOutput(t *testing.T) {
 				t.Errorf("Run().stdout = %q, want %q", got, tt.wantStdout)
 			}
 			if got := stderr.String(); got != tt.wantStderr {
-				t.Errorf("Run().stderr = %q, want empty", tt.wantStderr)
+				t.Errorf("Run().stderr = %q, want %q", got, tt.wantStderr)
 			}
 		})
 	}
