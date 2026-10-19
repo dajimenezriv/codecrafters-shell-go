@@ -35,6 +35,12 @@ func main() {
 			continue
 		}
 
+		if command == "pwd" {
+			path, _ := os.Getwd()
+			fmt.Println(path)
+			continue
+		}
+
 		if command == "type" {
 			if args == "exit" || args == "echo" || args == "type" {
 				fmt.Printf("%s is a shell builtin\n", args)
