@@ -48,19 +48,32 @@ func TestBuiltins(t *testing.T) {
 func TestRedirectOutput(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "output")
 
-	stdout, stderr := runShell(t, "echo 'hello world' > "+path)
+	tests := []struct {
+		name, input, wantOutput, wantStdout, wantStderr string
+	}{
+		{"stdout >", "echo 'hello world' > " + path, "hello world\n", "$ $ ", ""},
+		{"stdout 1>", "echo 'hello world' 1> " + path, "hello world\n", "$ $ ", ""},
+		{"stderr 2>", "echo 'hello world' 2> " + path, "", "$ hello world\n$ ", ""},
+	}
 
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read file = %v", err)
-	}
-	if got, want := string(b), "hello world\n"; got != want {
-		t.Fatalf("cmd stdout = %q, want %q", got, want)
-	}
-	if got, want := stdout.String(), "$ $ "; got != want {
-		t.Errorf("Run().stdout = %q, want %q", got, want)
-	}
-	if got := stderr.String(); got != "" {
-		t.Errorf("Run().stderr = %q, want empty", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			stdout, stderr := runShell(t, tt.input)
+
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read file = %v", err)
+			}
+			if got := string(b); got != tt.wantOutput {
+				t.Fatalf("cmd stdout = %q, want %q", got, tt.wantOutput)
+			}
+			if got := stdout.String(); got != tt.wantStdout {
+				t.Errorf("Run().stdout = %q, want %q", got, tt.wantStdout)
+			}
+			if got := stderr.String(); got != tt.wantStderr {
+				t.Errorf("Run().stderr = %q, want empty", tt.wantStderr)
+			}
+		})
 	}
 }
