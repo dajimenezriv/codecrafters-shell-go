@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/google/shlex"
 )
 
 func main() {
@@ -45,7 +47,11 @@ func (s *Shell) Run() int {
 			break
 		}
 
-		fields := strings.Fields(sc.Text())
+		fields, err := shlex.Split(sc.Text())
+		if err != nil {
+			fmt.Fprintf(s.stderr, "error parsing args: %v\n", err)
+			continue
+		}
 		if len(fields) == 0 {
 			continue
 		}
@@ -61,6 +67,8 @@ func (s *Shell) Run() int {
 		if err := cmd.Run(); err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
 				fmt.Fprintf(s.stderr, "%s: command not found\n", name)
+			} else {
+				fmt.Fprintf(s.stderr, "%s: %v\n", name, err)
 			}
 		}
 	}
@@ -85,8 +93,12 @@ func (s *Shell) echo(args string) { fmt.Fprintln(s.stdout, args) }
 func (s *Shell) exit(_ string) { s.exited = true }
 
 func (s *Shell) pwd(_ string) {
-	path, _ := os.Getwd()
-	fmt.Fprintln(s.stdout, path)
+	path, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(s.stderr, "pwd: %v\n", err)
+	} else {
+		fmt.Fprintln(s.stdout, path)
+	}
 }
 
 func (s *Shell) typeBuiltin(args string) {

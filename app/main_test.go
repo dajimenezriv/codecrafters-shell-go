@@ -10,6 +10,7 @@ func TestBuiltins(t *testing.T) {
 		name, input, wantStdout, wantStderr string
 	}{
 		{"echo", "echo hello   world\n", "$ hello world\n$ ", ""},
+		{"echo single quotes", "echo 'hello    world'\n", "$ hello    world\n$ ", ""},
 		{"empty line", "\n\n", "$ $ $ ", ""},
 		{"type builtin", "type echo\n", "$ echo is a shell builtin\n$ ", ""},
 		{"type missing", "type nosuchcmd\n", "$ nosuchcmd: not found\n$ ", ""},
