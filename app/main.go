@@ -39,16 +39,17 @@ func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
 }
 
 func (s *Shell) Run() int {
-	r := bufio.NewReader(s.stdin)
+	sc := bufio.NewScanner(s.stdin)
 
 	for !s.exited {
 		fmt.Fprint(s.stdout, "$ ")
+		if !sc.Scan() {
+			break
+		}
 
-		line, err := r.ReadString('\n')
-		line = strings.TrimSpace(line)
-		fields, err := shlex.Split(line)
+		fields, err := shlex.Split(sc.Text())
 		if err != nil {
-			fmt.Fprintf(s.stderr, "error reading line: %v\n", err)
+			fmt.Fprintf(s.stderr, "error parsing args: %v\n", err)
 			continue
 		}
 		if len(fields) == 0 {
@@ -70,6 +71,10 @@ func (s *Shell) Run() int {
 				fmt.Fprintf(s.stderr, "%s: %v\n", name, err)
 			}
 		}
+	}
+
+	if err := sc.Err(); err != nil {
+		fmt.Fprintf(s.stderr, "error reading input: %v\n", err)
 	}
 
 	return 0

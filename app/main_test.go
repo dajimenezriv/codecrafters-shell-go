@@ -10,12 +10,14 @@ func TestBuiltins(t *testing.T) {
 		name, input, wantStdout, wantStderr string
 	}{
 		{"echo", "echo hello   world\n", "$ hello world\n$ ", ""},
-		{"echo single quotes", "echo 'hello    world'\n", "$ hello    world\n$ ", ""},
 		{"empty line", "\n\n", "$ $ $ ", ""},
 		{"type builtin", "type echo\n", "$ echo is a shell builtin\n$ ", ""},
 		{"type missing", "type nosuchcmd\n", "$ nosuchcmd: not found\n$ ", ""},
 		{"unknown command", "nosuchcmd\n", "$ $ ", "nosuchcmd: command not found\n"},
 		{"exit stops processing", "exit\necho nope\n", "$ ", ""},
+		{"single quotes", "echo 'hello    world'\n", "$ hello    world\n$ ", ""},
+		{"double quotes", "echo \"shell's test\"\n", "$ shell's test\n$ ", ""},
+		{"backslash", "echo ignore\\_backslash\n", "$ ignore_backslash\n$ ", ""},
 	}
 
 	for _, tt := range tests {
