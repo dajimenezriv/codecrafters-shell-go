@@ -92,7 +92,8 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout, cmd.Stderr = s.cmdStdout, s.cmdStderr
 	if err := cmd.Run(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
+		if _, ok := errors.AsType[*exec.ExitError](err); ok {
+		} else if errors.Is(err, exec.ErrNotFound) {
 			fmt.Fprintf(s.cmdStderr, "%s: command not found\n", name)
 		} else {
 			fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
