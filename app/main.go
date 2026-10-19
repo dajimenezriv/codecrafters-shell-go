@@ -41,7 +41,7 @@ func (s *Shell) Run() int {
 		if !sc.Scan() {
 			break
 		}
-		s.prompt(sc.Text())
+		s.runLine(sc.Text())
 	}
 
 	if err := sc.Err(); err != nil {
@@ -87,10 +87,10 @@ var redirects = map[string]redirect{
 	"2>>": {2, os.O_APPEND | os.O_CREATE | os.O_WRONLY},
 }
 
-func (s *Shell) prompt(line string) {
+func (s *Shell) runLine(line string) {
 	fields, err := shlex.Split(line)
 	if err != nil {
-		fmt.Fprintf(s.Stderr, "parse error: %v", err)
+		fmt.Fprintf(s.Stderr, "parse error: %v\n", err)
 		return
 	}
 	if len(fields) == 0 {
@@ -101,11 +101,11 @@ func (s *Shell) prompt(line string) {
 	stdout, stderr := s.Stdout, s.Stderr
 
 	if len(args) >= 2 {
-		char := args[len(args)-2]
-		if r, ok := redirects[char]; ok {
+		op := args[len(args)-2]
+		if r, ok := redirects[op]; ok {
 			f, err := os.OpenFile(args[len(args)-1], r.flags, 0o644)
 			if err != nil {
-				fmt.Fprintf(s.Stderr, "cannot open output file: %v", err)
+				fmt.Fprintf(s.Stderr, "cannot open output file: %v\n", err)
 				return
 			}
 			defer f.Close()
@@ -148,7 +148,7 @@ func (c *command) cd(args []string) {
 		if errors.Is(err, fs.ErrNotExist) {
 			fmt.Fprintf(c.stderr, "cd: %s: No such file or directory\n", dir)
 		} else {
-			fmt.Fprintf(c.stderr, "cd: %v", err)
+			fmt.Fprintf(c.stderr, "cd: %v\n", err)
 		}
 	}
 }
@@ -166,7 +166,7 @@ func (c *command) pwd(_ []string) {
 	if err != nil {
 		fmt.Fprintf(c.stderr, "pwd: %v\n", err)
 	} else {
-		fmt.Fprintf(c.stdout, "%s\n", path)
+		fmt.Fprintln(c.stdout, path)
 	}
 }
 
