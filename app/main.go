@@ -77,16 +77,16 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 		var f *os.File
 		switch char {
 		case ">", "1>":
-			f = s.createOutputFile(args[len(args)-1])
+			f = s.getOutputFile(args[len(args)-1], os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 			s.cmdStdout = f
 		case "2>":
-			f = s.createOutputFile(args[len(args)-1])
+			f = s.getOutputFile(args[len(args)-1], os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 			s.cmdStderr = f
 		case ">>", "1>>":
-			f = s.appendOutputFile(args[len(args)-1])
+			f = s.getOutputFile(args[len(args)-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY)
 			s.cmdStdout = f
 		case "2>>":
-			f = s.appendOutputFile(args[len(args)-1])
+			f = s.getOutputFile(args[len(args)-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY)
 			s.cmdStderr = f
 		}
 
@@ -113,19 +113,11 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 	}
 }
 
-func (s *Shell) createOutputFile(path string) *os.File {
-	f, err := os.Create(path)
+func (s *Shell) getOutputFile(path string, flags int) *os.File {
+	f, err := os.OpenFile(path, flags, 0644)
 	if err != nil {
-		fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
+		fmt.Fprintf(s.Stderr, "cannot get output file: %v\n", err)
 		return nil
-	}
-	return f
-}
-
-func (s *Shell) appendOutputFile(path string) *os.File {
-	f, err := os.Open(path)
-	if err != nil {
-		return s.createOutputFile(path)
 	}
 	return f
 }

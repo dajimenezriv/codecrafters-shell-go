@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,15 +49,27 @@ func TestBuiltins(t *testing.T) {
 func TestRedirectOutput(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "output")
 
+	success := func(char string) string {
+		return fmt.Sprintf("echo 'hello world' %s %s", char, path)
+	}
+	invalid := func(char string) string {
+		return fmt.Sprintf("cd nonexisting %s %s", char, path)
+	}
+	append := func(char string) string {
+		return fmt.Sprintf("echo 'hello world' %s %s\necho 'hello world' %s %s\n", char, path, char, path)
+	}
+
 	tests := []struct {
 		name, input, wantOutput, wantStdout, wantStderr string
 	}{
-		{"success stdout >", "echo 'hello world' > " + path, "hello world\n", "$ $ ", ""},
-		{"success stdout 1>", "echo 'hello world' 1> " + path, "hello world\n", "$ $ ", ""},
-		{"success stderr 2>", "echo 'hello world' 2> " + path, "", "$ hello world\n$ ", ""},
-		{"error stdout >", "cd nonexisting > " + path, "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
-		{"error stdout 1>", "cd nonexisting > " + path, "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
-		{"error stderr 2>", "cd nonexisting 2> " + path, "cd: nonexisting: No such file or directory\n", "$ $ ", ""},
+		{"success stdout >", success(">"), "hello world\n", "$ $ ", ""},
+		{"success stdout 1>", success("1>"), "hello world\n", "$ $ ", ""},
+		{"success stderr 2>", success("2>"), "", "$ hello world\n$ ", ""},
+		{"error stdout >", invalid(">"), "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
+		{"error stdout 1>", invalid("1>"), "", "$ $ ", "cd: nonexisting: No such file or directory\n"},
+		{"error stderr 2>", invalid("2>"), "cd: nonexisting: No such file or directory\n", "$ $ ", ""},
+		{"append stdout >>", append(">>"), "hello world\nhello world\n", "$ $ $ ", ""},
+		{"append stdout 1>>", append("1>>"), "hello world\nhello world\n", "$ $ $ ", ""},
 	}
 
 	for _, tt := range tests {
