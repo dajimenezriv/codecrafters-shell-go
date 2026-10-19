@@ -46,8 +46,6 @@ func TestBuiltins(t *testing.T) {
 }
 
 func TestRedirectOutput(t *testing.T) {
-	t.Helper()
-
 	path := filepath.Join(t.TempDir(), "output")
 
 	stdout, stderr := runShell(t, "echo 'hello world' > "+path)

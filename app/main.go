@@ -72,16 +72,22 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 
 	s.cmdStdout, s.cmdStderr = s.Stdout, s.Stderr
 
-	l := len(args)
-	if l >= 2 && (args[l-2] == ">" || args[l-2] == "1>") {
-		f, err := os.Create(args[l-1])
-		if err != nil {
-			fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
-			return
+	if len(args) >= 2 {
+		char := args[len(args)-2]
+		var f *os.File
+		switch char {
+		case ">", "1>":
+			f = s.createOutputFile(args[len(args)-1])
+			s.cmdStdout = f
+		case "2>":
+			f = s.createOutputFile(args[len(args)-1])
+			s.cmdStderr = f
 		}
-		defer f.Close()
-		s.cmdStdout = f
-		args = args[:l-2]
+
+		if f != nil {
+			defer f.Close()
+			args = args[:len(args)-2]
+		}
 	}
 
 	if fn, ok := s.Builtins[name]; ok {
@@ -99,6 +105,15 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 			fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
 		}
 	}
+}
+
+func (s *Shell) createOutputFile(path string) *os.File {
+	f, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
+		return nil
+	}
+	return f
 }
 
 func (s *Shell) cd(args string) {
