@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+var commands = map[string]func(args string){
+	"cd":   cd,
+	"echo": echo,
+	"pwd":  pwd,
+	"type": typeCMD,
+}
+
 func main() {
 	r := bufio.NewReader(os.Stdin)
 
@@ -30,46 +37,58 @@ func main() {
 			break
 		}
 
-		if command == "echo" {
-			fmt.Println(args)
+		if fn, ok := commands[command]; ok {
+			fn(args)
 			continue
 		}
 
-		if command == "pwd" {
-			path, _ := os.Getwd()
-			fmt.Println(path)
+		path, ok := searchExecutableCommand(command)
+		if !ok {
+			fmt.Printf("%s: command not found\n", command)
 			continue
 		}
 
-		if command == "type" {
-			if args == "exit" || args == "echo" || args == "type" || args == "pwd" {
-				fmt.Printf("%s is a shell builtin\n", args)
-			} else {
-				path, ok := searchExecutableCommand(args)
-				if ok {
-					fmt.Printf("%s is %s\n", args, path)
-				} else {
-					fmt.Printf("%s not found\n", args)
-				}
-			}
-		} else {
-			path, ok := searchExecutableCommand(command)
-			if !ok {
-				fmt.Printf("%s: command not found\n", command)
-				continue
-			}
-
-			cmd := exec.Cmd{
-				Path:   path,
-				Args:   inputList,
-				Stdin:  os.Stdin,
-				Stdout: os.Stdout,
-				Stderr: os.Stderr,
-			}
-			if err := cmd.Run(); err != nil {
-				fmt.Println(err)
-			}
+		cmd := exec.Cmd{
+			Path:   path,
+			Args:   inputList,
+			Stdin:  os.Stdin,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
 		}
+		if err := cmd.Run(); err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func cd(args string) {
+	err := os.Chdir(args)
+	if err != nil {
+		fmt.Printf("cd: %s: No such file or directory\n", args)
+	}
+}
+
+func echo(args string) {
+	fmt.Println(args)
+}
+
+func pwd(_ string) {
+	path, _ := os.Getwd()
+	fmt.Println(path)
+}
+
+func typeCMD(args string) {
+	_, ok := commands[args]
+	if args == "exit" || ok {
+		fmt.Printf("%s is a shell builtin\n", args)
+		return
+	}
+
+	path, ok := searchExecutableCommand(args)
+	if ok {
+		fmt.Printf("%s is %s\n", args, path)
+	} else {
+		fmt.Printf("%s not found\n", args)
 	}
 }
 
