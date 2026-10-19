@@ -42,7 +42,7 @@ func main() {
 		}
 
 		if command == "type" {
-			if args == "exit" || args == "echo" || args == "type" {
+			if args == "exit" || args == "echo" || args == "type" || args == "pwd" {
 				fmt.Printf("%s is a shell builtin\n", args)
 			} else {
 				path, ok := searchExecutableCommand(args)
