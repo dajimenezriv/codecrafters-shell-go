@@ -19,16 +19,17 @@ func main() {
 type builtin func(args string)
 
 type Shell struct {
-	builtins map[string]builtin
-	stdin    io.Reader
-	stdout   io.Writer
-	stderr   io.Writer
-	exited   bool
+	Builtins       map[string]builtin
+	Stdin          io.Reader
+	Stdout, Stderr io.Writer
+	Exited         bool
+
+	cmdStdout, cmdStderr io.Writer
 }
 
 func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
-	s := &Shell{stdin: stdin, stdout: stdout, stderr: stderr}
-	s.builtins = map[string]builtin{
+	s := &Shell{Stdin: stdin, Stdout: stdout, Stderr: stderr}
+	s.Builtins = map[string]builtin{
 		"cd":   s.cd,
 		"echo": s.echo,
 		"exit": s.exit,
@@ -39,17 +40,17 @@ func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
 }
 
 func (s *Shell) Run() int {
-	sc := bufio.NewScanner(s.stdin)
+	sc := bufio.NewScanner(s.Stdin)
 
-	for !s.exited {
-		fmt.Fprint(s.stdout, "$ ")
+	for !s.Exited {
+		fmt.Fprint(s.Stdout, "$ ")
 		if !sc.Scan() {
 			break
 		}
 
 		fields, err := shlex.Split(sc.Text())
 		if err != nil {
-			fmt.Fprintf(s.stderr, "error parsing args: %v\n", err)
+			fmt.Fprintf(s.Stderr, "error parsing args: %v\n", err)
 			continue
 		}
 		if len(fields) == 0 {
@@ -57,24 +58,41 @@ func (s *Shell) Run() int {
 		}
 		name, args := fields[0], fields[1:]
 
-		if fn, ok := s.builtins[name]; ok {
+		s.cmdStdout = s.Stdout
+
+		l := len(args)
+		if l > 2 {
+			if args[l-2] == ">" {
+				path := args[l-1]
+				f, err := os.Create(path)
+				if err != nil {
+					fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
+					continue
+				}
+				defer f.Close()
+				s.cmdStdout = f
+				args = args[:l-2]
+			}
+		}
+
+		if fn, ok := s.Builtins[name]; ok {
 			fn(strings.Join(args, " "))
 			continue
 		}
 
 		cmd := exec.Command(name, args...)
-		cmd.Stdout, cmd.Stderr = s.stdout, s.stderr
+		cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
 		if err := cmd.Run(); err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
-				fmt.Fprintf(s.stderr, "%s: command not found\n", name)
+				fmt.Fprintf(s.Stderr, "%s: command not found\n", name)
 			} else {
-				fmt.Fprintf(s.stderr, "%s: %v\n", name, err)
+				fmt.Fprintf(s.Stderr, "%s: %v\n", name, err)
 			}
 		}
 	}
 
 	if err := sc.Err(); err != nil {
-		fmt.Fprintf(s.stderr, "error reading input: %v\n", err)
+		fmt.Fprintf(s.Stderr, "error reading input: %v\n", err)
 	}
 
 	return 0
@@ -89,25 +107,25 @@ func (s *Shell) cd(args string) {
 	}
 }
 
-func (s *Shell) echo(args string) { fmt.Fprintln(s.stdout, args) }
+func (s *Shell) echo(args string) { fmt.Fprintln(s.cmdStdout, args) }
 
-func (s *Shell) exit(_ string) { s.exited = true }
+func (s *Shell) exit(_ string) { s.Exited = true }
 
 func (s *Shell) pwd(_ string) {
 	path, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(s.stderr, "pwd: %v\n", err)
+		fmt.Fprintf(s.Stderr, "pwd: %v\n", err)
 	} else {
-		fmt.Fprintln(s.stdout, path)
+		fmt.Fprintln(s.cmdStdout, path)
 	}
 }
 
 func (s *Shell) typeBuiltin(args string) {
-	if _, ok := s.builtins[args]; ok {
-		fmt.Fprintf(s.stdout, "%s is a shell builtin\n", args)
+	if _, ok := s.Builtins[args]; ok {
+		fmt.Fprintf(s.cmdStdout, "%s is a shell builtin\n", args)
 	} else if path, err := exec.LookPath(args); err != nil {
-		fmt.Fprintf(s.stdout, "%s: not found\n", args)
+		fmt.Fprintf(s.cmdStdout, "%s: not found\n", args)
 	} else {
-		fmt.Fprintf(s.stdout, "%s is %s\n", args, path)
+		fmt.Fprintf(s.cmdStdout, "%s is %s\n", args, path)
 	}
 }

@@ -1,9 +1,20 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func runShell(t *testing.T, input string) (strings.Builder, strings.Builder) {
+	var stdout, stderr strings.Builder
+	code := NewShell(strings.NewReader(input), &stdout, &stderr).Run()
+	if code != 0 {
+		t.Errorf("Run() = %d, want 0", code)
+	}
+	return stdout, stderr
+}
 
 func TestBuiltins(t *testing.T) {
 	tests := []struct {
@@ -22,13 +33,8 @@ func TestBuiltins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var stdout, stderr strings.Builder
+			stdout, stderr := runShell(t, tt.input)
 
-			code := NewShell(strings.NewReader(tt.input), &stdout, &stderr).Run()
-
-			if code != 0 {
-				t.Errorf("Run() = %d, want 0", code)
-			}
 			if got := stdout.String(); got != tt.wantStdout {
 				t.Errorf("Run().stdout = %q, want %q", got, tt.wantStdout)
 			}
@@ -36,5 +42,27 @@ func TestBuiltins(t *testing.T) {
 				t.Errorf("Run().stderr = %q, want %q", got, tt.wantStderr)
 			}
 		})
+	}
+}
+
+func TestRedirectOutput(t *testing.T) {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "output")
+
+	stdout, stderr := runShell(t, "echo 'hello world' > "+path)
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read file = %v", err)
+	}
+	if got, want := string(b), "hello world\n"; got != want {
+		t.Fatalf("cmd stdout = %q, want %q", got, want)
+	}
+	if got, want := stdout.String(), "$ $ "; got != want {
+		t.Errorf("Run().stdout = %q, want %q", got, want)
+	}
+	if got := stderr.String(); got != "" {
+		t.Errorf("Run().stderr = %q, want empty", got)
 	}
 }
