@@ -78,12 +78,12 @@ func (s *Shell) Run() int {
 		}
 
 		cmd := exec.Command(name, args...)
-		cmd.Stdout, cmd.Stderr = s.Stdout, s.Stderr
+		cmd.Stdout, cmd.Stderr = s.cmdStdout, s.cmdStderr
 		if err := cmd.Run(); err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
-				fmt.Fprintf(s.Stderr, "%s: command not found\n", name)
+				fmt.Fprintf(s.cmdStderr, "%s: command not found\n", name)
 			} else {
-				fmt.Fprintf(s.Stderr, "%s: %v\n", name, err)
+				fmt.Fprintf(s.cmdStderr, "%s: %v\n", name, err)
 			}
 		}
 	}
@@ -100,7 +100,7 @@ func (s *Shell) cd(args string) {
 		args, _ = os.UserHomeDir()
 	}
 	if err := os.Chdir(args); err != nil {
-		fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", args)
+		fmt.Fprintf(s.cmdStderr, "cd: %s: No such file or directory\n", args)
 	}
 }
 
@@ -111,7 +111,7 @@ func (s *Shell) exit(_ string) { s.Exited = true }
 func (s *Shell) pwd(_ string) {
 	path, err := os.Getwd()
 	if err != nil {
-		fmt.Fprintf(s.Stderr, "pwd: %v\n", err)
+		fmt.Fprintf(s.cmdStderr, "pwd: %v\n", err)
 	} else {
 		fmt.Fprintln(s.cmdStdout, path)
 	}
