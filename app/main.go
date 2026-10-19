@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	NewShell(os.Stdin, os.Stdout, os.Stderr).Run()
+	os.Exit(NewShell(os.Stdin, os.Stdout, os.Stderr).Run())
 }
 
 type builtin func(args string)
@@ -21,6 +21,7 @@ type Shell struct {
 	stdin    io.Reader
 	stdout   io.Writer
 	stderr   io.Writer
+	exited   bool
 }
 
 func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
@@ -35,12 +36,11 @@ func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
 	return s
 }
 
-func (s *Shell) Run() {
+func (s *Shell) Run() int {
 	sc := bufio.NewScanner(s.stdin)
 
-	for {
-		fmt.Print("$ ")
-
+	for !s.exited {
+		fmt.Fprint(s.stdout, "$ ")
 		if !sc.Scan() {
 			break
 		}
@@ -49,15 +49,14 @@ func (s *Shell) Run() {
 		if len(fields) == 0 {
 			continue
 		}
-		name, argsList := fields[0], fields[1:]
-		args := strings.Join(argsList, " ")
+		name, args := fields[0], fields[1:]
 
 		if fn, ok := s.builtins[name]; ok {
-			fn(args)
+			fn(strings.Join(args, " "))
 			continue
 		}
 
-		cmd := exec.Command(name, argsList...)
+		cmd := exec.Command(name, args...)
 		cmd.Stdout, cmd.Stderr = s.stdout, s.stderr
 		if err := cmd.Run(); err != nil {
 			if errors.Is(err, exec.ErrNotFound) {
@@ -69,6 +68,7 @@ func (s *Shell) Run() {
 	if err := sc.Err(); err != nil {
 		fmt.Fprintf(s.stderr, "error reading input: %v\n", err)
 	}
+	return 0
 }
 
 func (s *Shell) cd(args string) {
@@ -80,25 +80,21 @@ func (s *Shell) cd(args string) {
 	}
 }
 
-func (s *Shell) echo(args string) {
-	fmt.Println(args)
-}
+func (s *Shell) echo(args string) { fmt.Fprintln(s.stdout, args) }
 
-func (s *Shell) exit(_ string) {
-	os.Exit(0)
-}
+func (s *Shell) exit(_ string) { s.exited = true }
 
 func (s *Shell) pwd(_ string) {
 	path, _ := os.Getwd()
-	fmt.Println(path)
+	fmt.Fprintln(s.stdout, path)
 }
 
 func (s *Shell) typeBuiltin(args string) {
 	if _, ok := s.builtins[args]; ok {
-		fmt.Printf("%s is a shell builtin\n", args)
+		fmt.Fprintf(s.stdout, "%s is a shell builtin\n", args)
 	} else if path, err := exec.LookPath(args); err != nil {
-		fmt.Printf("%s is %s\n", args, path)
+		fmt.Fprintf(s.stdout, "%s: not found\n", args)
 	} else {
-		fmt.Printf("%s not found\n", args)
+		fmt.Fprintf(s.stdout, "%s is %s\n", args, path)
 	}
 }
