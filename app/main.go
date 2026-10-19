@@ -68,6 +68,9 @@ func main() {
 }
 
 func cd(args string) {
+	if args == "~" {
+		args, _ = os.UserHomeDir()
+	}
 	err := os.Chdir(args)
 	if err != nil {
 		fmt.Printf("cd: %s: No such file or directory\n", args)
