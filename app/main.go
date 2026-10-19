@@ -82,6 +82,12 @@ func (s *Shell) prompt(sc *bufio.Scanner) {
 		case "2>":
 			f = s.createOutputFile(args[len(args)-1])
 			s.cmdStderr = f
+		case ">>", "1>>":
+			f = s.appendOutputFile(args[len(args)-1])
+			s.cmdStdout = f
+		case "2>>":
+			f = s.appendOutputFile(args[len(args)-1])
+			s.cmdStderr = f
 		}
 
 		if f != nil {
@@ -112,6 +118,14 @@ func (s *Shell) createOutputFile(path string) *os.File {
 	if err != nil {
 		fmt.Fprintf(s.Stderr, "cannot create output file: %v\n", err)
 		return nil
+	}
+	return f
+}
+
+func (s *Shell) appendOutputFile(path string) *os.File {
+	f, err := os.Open(path)
+	if err != nil {
+		return s.createOutputFile(path)
 	}
 	return f
 }
