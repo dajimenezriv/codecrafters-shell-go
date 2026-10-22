@@ -39,10 +39,14 @@ func (s *Shell) Run() int {
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
 		AutoComplete:    completer,
+		Stdin:           io.NopCloser(s.Stdin),
+		Stdout:          s.Stdout,
+		Stderr:          s.Stderr,
 		InterruptPrompt: "^C",
 	})
 	if err != nil {
 		fmt.Fprintf(s.Stderr, "readline error: %v\n", err)
+		return 1
 	}
 	defer rl.Close()
 
