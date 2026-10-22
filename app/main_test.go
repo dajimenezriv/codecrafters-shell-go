@@ -21,15 +21,15 @@ func TestBuiltins(t *testing.T) {
 	tests := []struct {
 		name, input, wantStdout, wantStderr string
 	}{
-		{"echo", "echo hello   world\n", "$ hello world\n$ ", ""},
-		{"empty line", "\n\n", "$ $ $ ", ""},
-		{"type builtin", "type echo\n", "$ echo is a shell builtin\n$ ", ""},
-		{"type missing", "type nosuchcmd\n", "$ nosuchcmd: not found\n$ ", ""},
-		{"unknown command", "nosuchcmd\n", "$ $ ", "nosuchcmd: command not found\n"},
-		{"exit stops processing", "exit\necho nope\n", "$ ", ""},
-		{"single quotes", "echo 'hello    world'\n", "$ hello    world\n$ ", ""},
-		{"double quotes", "echo \"shell's test\"\n", "$ shell's test\n$ ", ""},
-		{"backslash", "echo ignore\\_backslash\n", "$ ignore_backslash\n$ ", ""},
+		{"echo", "echo hello   world\n", "hello world\n", ""},
+		{"empty line", "\n\n", "", ""},
+		{"type builtin", "type echo\n", "echo is a shell builtin\n", ""},
+		{"type missing", "type nosuchcmd\n", "nosuchcmd: not found\n", ""},
+		{"unknown command", "nosuchcmd\n", "", "nosuchcmd: command not found\n"},
+		{"exit stops processing", "exit\necho nope\n", "", ""},
+		{"single quotes", "echo 'hello    world'\n", "hello    world\n", ""},
+		{"double quotes", "echo \"shell's test\"\n", "shell's test\n", ""},
+		{"backslash", "echo ignore\\_backslash\n", "ignore_backslash\n", ""},
 	}
 
 	for _, tt := range tests {
@@ -73,14 +73,14 @@ func TestRedirectOutput(t *testing.T) {
 		wantStdout string
 		wantStderr string
 	}{
-		{"success stdout >", success(">"), "hello world\n", "$ $ ", ""},
-		{"success stdout 1>", success("1>"), "hello world\n", "$ $ ", ""},
-		{"success stderr 2>", success("2>"), "", "$ hello world\n$ ", ""},
-		{"error stdout >", invalid(">"), "", "$ $ ", errMsg},
-		{"error stdout 1>", invalid("1>"), "", "$ $ ", errMsg},
-		{"error stderr 2>", invalid("2>"), errMsg, "$ $ ", ""},
-		{"append stdout >>", twice(">>"), "hello world\nhello world\n", "$ $ $ ", ""},
-		{"append stdout 1>>", twice("1>>"), "hello world\nhello world\n", "$ $ $ ", ""},
+		{"success stdout >", success(">"), "hello world\n", "", ""},
+		{"success stdout 1>", success("1>"), "hello world\n", "", ""},
+		{"success stderr 2>", success("2>"), "", "hello world\n", ""},
+		{"error stdout >", invalid(">"), "", "", errMsg},
+		{"error stdout 1>", invalid("1>"), "", "", errMsg},
+		{"error stderr 2>", invalid("2>"), errMsg, "", ""},
+		{"append stdout >>", twice(">>"), "hello world\nhello world\n", "", ""},
+		{"append stdout 1>>", twice("1>>"), "hello world\nhello world\n", "", ""},
 	}
 
 	for _, tt := range tests {
