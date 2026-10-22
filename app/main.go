@@ -48,7 +48,11 @@ func (s *Shell) Run() int {
 		fmt.Fprintf(s.Stderr, "readline error: %v\n", err)
 		return 1
 	}
-	defer rl.Close()
+	defer func() {
+		if err := rl.Close(); err != nil {
+			fmt.Fprintf(s.Stderr, "readline close: %v\n", err)
+		}
+	}()
 
 	for !s.Exited {
 		line, err := rl.Readline()
@@ -120,7 +124,12 @@ func (s *Shell) runLine(line string) {
 				fmt.Fprintf(s.Stderr, "cannot open output file: %v\n", err)
 				return
 			}
-			defer f.Close()
+			defer func() {
+				if err := f.Close(); err != nil {
+					fmt.Fprintf(s.Stderr, "close output file: %v\n", err)
+				}
+			}()
+
 			if r.toStderr {
 				e.stderr = f
 			} else {
