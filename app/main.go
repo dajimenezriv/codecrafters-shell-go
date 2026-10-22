@@ -1,15 +1,17 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
+	"github.com/chzyer/readline"
 	"github.com/google/shlex"
 )
 
@@ -28,17 +30,28 @@ func NewShell(stdin io.Reader, stdout, stderr io.Writer) *Shell {
 }
 
 func (s *Shell) Run() int {
-	sc := bufio.NewScanner(s.Stdin)
-	for !s.Exited {
-		fmt.Fprint(s.Stdout, "$ ")
-		if !sc.Scan() {
-			break
-		}
-		s.runLine(sc.Text())
+	var items []readline.PrefixCompleterInterface
+	for _, name := range slices.Sorted(maps.Keys(builtins)) {
+		items = append(items, readline.PcItem(name))
 	}
-	if err := sc.Err(); err != nil {
-		fmt.Fprintf(s.Stderr, "error reading input: %v\n", err)
-		return 1
+	completer := readline.NewPrefixCompleter(items...)
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "$ ",
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+	})
+	if err != nil {
+		fmt.Fprintf(s.Stderr, "readline error: %v\n", err)
+	}
+	defer rl.Close()
+
+	for !s.Exited {
+		line, err := rl.Readline()
+		if err != nil {
+			return 0
+		}
+		s.runLine(line)
 	}
 	return 0
 }
